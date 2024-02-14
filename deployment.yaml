@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama2-7b
+  namespace: llama2-7b
+  labels:
+    app: llama2-7b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llama2-7b
+  template:
+    metadata:
+      labels:
+        app: llama2-7b
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: cloud.google.com/gke-spot
+                operator: In
+                values: 
+                - "true"
+      hostIPC: true
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai
+        args:
+        - --model=meta-llama/Llama-2-7b-hf
+        env:
+          - name: HUGGING_FACE_HUB_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: hf-token
+                key: token
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 4Gi
+            nvidia.com/gpu: '1'
+          limits:
+            nvidia.com/gpu: '1'
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          timeoutSeconds: 1
+          failureThreshold: 12
+        volumeMounts:
+        - name: cache
+          mountPath: /root/.cache/huggingface
+      tolerations:
+      - key: llm
+        operator: Equal
+        value: llama2
+        effect: NoSchedule
+      volumes:
+      - name: cache
+        emptyDir: {}
+        
